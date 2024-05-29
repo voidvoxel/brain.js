@@ -1,11 +1,8 @@
 import AE from "./autoencoder";
+import UntrainedNeuralNetworkError from "./errors/untrained-neural-network-error";
 import { INeuralNetworkData, INeuralNetworkDatum, INeuralNetworkTrainOptions } from "./neural-network";
 import { NeuralNetworkGPU } from "./neural-network-gpu";
 import { INeuralNetworkState } from "./neural-network-types";
-
-function notYetInitializedError() {
-  return new Error("The network must be trained before running.");
-}
 
 export interface IAEBOptions<InputType extends INeuralNetworkData, OutputType extends INeuralNetworkData> {
   binaryThresh: number;
@@ -33,8 +30,8 @@ export class AEBridge<InputType extends INeuralNetworkData, OutputType extends I
   constructor(options?: Partial<IAEBOptions<InputType, OutputType>>) {
     options ??= {};
 
-    if (!options.inputAE) throw notYetInitializedError();
-    if (!options.outputAE) throw notYetInitializedError();
+    if (!options.inputAE) throw new UntrainedNeuralNetworkError();
+    if (!options.outputAE) throw new UntrainedNeuralNetworkError();
 
     this.#binaryThresh = options.binaryThresh ?? 0.5;
 
@@ -43,13 +40,13 @@ export class AEBridge<InputType extends INeuralNetworkData, OutputType extends I
   }
 
   forward(input: InputType) {
-    if (!this.#inputAE || !this.#mergeAE || !this.#outputAE) throw notYetInitializedError();
+    if (!this.#inputAE || !this.#mergeAE || !this.#outputAE) throw new UntrainedNeuralNetworkError();
 
     return this.#outputAE.decode(this.#mergeAE.run(this.#inputAE.encode(input)));
   }
 
   backward(input: OutputType) {
-    if (!this.#inputAE || !this.#mergeAE || !this.#outputAE) throw notYetInitializedError();
+    if (!this.#inputAE || !this.#mergeAE || !this.#outputAE) throw new UntrainedNeuralNetworkError();
 
     return this.#inputAE.decode(this.#mergeAE.run(this.#outputAE.encode(input)));
   }
