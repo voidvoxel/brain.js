@@ -18,7 +18,7 @@ export interface IAEBOptions<InputType extends INeuralNetworkData, OutputType ex
  *
  * Two existing autoencoders are used to train a third autoencoder which handles translations between the two encodings.
  */
-export class AEB<InputType extends INeuralNetworkData, OutputType extends INeuralNetworkData> {
+export class AEBridge<InputType extends INeuralNetworkData, OutputType extends INeuralNetworkData> {
   #binaryThresh: number;
   #inputAE: AE<InputType, Float32Array>;
   #outputAE: AE<OutputType, Float32Array>;
@@ -78,4 +78,4 @@ export class AEB<InputType extends INeuralNetworkData, OutputType extends INeura
   }
 }
 
-export default AEB;
+export default AEBridge;
