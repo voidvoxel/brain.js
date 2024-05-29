@@ -15,6 +15,8 @@ export interface IAEBOptions<InputType extends INeuralNetworkData, OutputType ex
 
 /**
  * An autoencoder bridge (AEB) is a set of 3 autoencoders designed to serve as a bridge between two dissimilar data formats.
+ *
+ * Two existing autoencoders are used to train a third autoencoder which handles translations between the two encodings.
  */
 export class AEB<InputType extends INeuralNetworkData, OutputType extends INeuralNetworkData> {
   #binaryThresh: number;
@@ -57,16 +59,15 @@ export class AEB<InputType extends INeuralNetworkData, OutputType extends INeura
       value => ({ input: this.#inputAE.encode(value.input as InputType), output: this.#outputAE.encode(value.output as OutputType) })
     );
 
-    console.log(trainingData);
-
     const inputSize = trainingData[0].input.length ?? 1;
     const outputSize = trainingData[0].output.length ?? 1;
+    const hiddenSize = Math.max(1, Math.round(outputSize * 0.6));
 
     const mergeAE = new NeuralNetworkGPU<Float32Array, Float32Array>(
       {
         binaryThresh: this.#binaryThresh,
         inputSize,
-        hiddenLayers: [ inputSize, Math.max(1, Math.round(outputSize * 0.6)) ],
+        hiddenLayers: [ inputSize, hiddenSize ],
         outputSize
       }
     );
