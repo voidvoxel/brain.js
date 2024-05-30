@@ -1,6 +1,6 @@
 import * as activation from './activation';
 import { AE } from './autoencoder';
-import { AEBridge } from './autoencoder-bridge';
+import { AEProxy } from './autoencoder-proxy';
 import CrossValidate from './cross-validate';
 import { FeedForward } from './feed-forward';
 import * as layer from './layer';
@@ -35,8 +35,7 @@ const recurrent = {
   GRUTimeStep,
   RNN,
   LSTM,
-  GRU,
-  FMU
+  GRU
 };
 
 const utilities = {
@@ -57,7 +56,7 @@ const utilities = {
 export {
   activation,
   AE,
-  AEBridge,
+  AEProxy,
   CrossValidate,
   likely,
   layer,

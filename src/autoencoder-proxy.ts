@@ -4,10 +4,10 @@ import { INeuralNetworkData, INeuralNetworkDatum, INeuralNetworkTrainOptions } f
 import { NeuralNetworkGPU } from "./neural-network-gpu";
 import { INeuralNetworkState } from "./neural-network-types";
 
-export interface IAEBOptions<InputType extends INeuralNetworkData, OutputType extends INeuralNetworkData> {
+export interface IAEProxyOptions<InputType extends INeuralNetworkData, OutputType extends INeuralNetworkData> {
   binaryThresh: number;
-  inputAE: AE<InputType, Float32Array>;
-  outputAE: AE<OutputType, Float32Array>;
+  input: AE<InputType, Float32Array>;
+  output: AE<OutputType, Float32Array>;
 }
 
 /**
@@ -15,40 +15,40 @@ export interface IAEBOptions<InputType extends INeuralNetworkData, OutputType ex
  *
  * Two existing autoencoders are used to train a third autoencoder which handles translations between the two encodings.
  */
-export class AEBridge<InputType extends INeuralNetworkData, OutputType extends INeuralNetworkData> {
+export class AEProxy<InputType extends INeuralNetworkData, OutputType extends INeuralNetworkData> {
   #binaryThresh: number;
   #inputAE: AE<InputType, Float32Array>;
   #outputAE: AE<OutputType, Float32Array>;
-  #mergeAE?: NeuralNetworkGPU<Float32Array, Float32Array>;
+  #proxyAE?: NeuralNetworkGPU<Float32Array, Float32Array>;
 
-  mergeTrainingData(inputData: InputType[], outputData: OutputType[]): Array<INeuralNetworkDatum<Partial<InputType>, Partial<OutputType>>> {
+  proxyTrainingData(inputData: InputType[], outputData: OutputType[]): Array<INeuralNetworkDatum<Partial<InputType>, Partial<OutputType>>> {
     return inputData.map(
       (input, index) => ({ input, output: outputData[index] })
     );
   }
 
-  constructor(options?: Partial<IAEBOptions<InputType, OutputType>>) {
+  constructor(options?: Partial<IAEProxyOptions<InputType, OutputType>>) {
     options ??= {};
 
-    if (!options.inputAE) throw new UntrainedNeuralNetworkError();
-    if (!options.outputAE) throw new UntrainedNeuralNetworkError();
+    if (!options.input) throw new UntrainedNeuralNetworkError();
+    if (!options.output) throw new UntrainedNeuralNetworkError();
 
     this.#binaryThresh = options.binaryThresh ?? 0.5;
 
-    this.#inputAE = options.inputAE;
-    this.#outputAE = options.outputAE;
+    this.#inputAE = options.input;
+    this.#outputAE = options.output;
   }
 
   forward(input: InputType) {
-    if (!this.#inputAE || !this.#mergeAE || !this.#outputAE) throw new UntrainedNeuralNetworkError();
+    if (!this.#inputAE || !this.#proxyAE || !this.#outputAE) throw new UntrainedNeuralNetworkError();
 
-    return this.#outputAE.decode(this.#mergeAE.run(this.#inputAE.encode(input)));
+    return this.#outputAE.decode(this.#proxyAE.run(this.#inputAE.encode(input)));
   }
 
-  backward(input: OutputType) {
-    if (!this.#inputAE || !this.#mergeAE || !this.#outputAE) throw new UntrainedNeuralNetworkError();
+  reverse(output: OutputType) {
+    if (!this.#inputAE || !this.#proxyAE || !this.#outputAE) throw new UntrainedNeuralNetworkError();
 
-    return this.#inputAE.decode(this.#mergeAE.run(this.#outputAE.encode(input)));
+    return this.#inputAE.decode(this.#proxyAE.run(this.#outputAE.encode(output)));
   }
 
   train(data: Array<INeuralNetworkDatum<Partial<InputType>, Partial<OutputType>>>, options?: Partial<INeuralNetworkTrainOptions> | undefined): INeuralNetworkState {
@@ -60,7 +60,7 @@ export class AEBridge<InputType extends INeuralNetworkData, OutputType extends I
     const outputSize = trainingData[0].output.length ?? 1;
     const hiddenSize = Math.max(1, Math.round(outputSize * 0.6));
 
-    const mergeAE = new NeuralNetworkGPU<Float32Array, Float32Array>(
+    const proxyAE = new NeuralNetworkGPU<Float32Array, Float32Array>(
       {
         binaryThresh: this.#binaryThresh,
         inputSize,
@@ -69,10 +69,10 @@ export class AEBridge<InputType extends INeuralNetworkData, OutputType extends I
       }
     );
 
-    this.#mergeAE = mergeAE;
+    this.#proxyAE = proxyAE;
 
-    return mergeAE.train(trainingData, options);
+    return proxyAE.train(trainingData, options);
   }
 }
 
-export default AEBridge;
+export default AEProxy;
