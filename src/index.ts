@@ -1,6 +1,7 @@
 import * as activation from './activation';
 import { AE } from './autoencoder';
 import CrossValidate from './cross-validate';
+import { ELM } from './elm';
 import { FeedForward } from './feed-forward';
 import * as layer from './layer';
 import { layerTypes } from './layer';
@@ -61,6 +62,7 @@ export {
   layerTypes,
   lookup,
   praxis,
+  ELM,
   FeedForward,
   NeuralNetwork,
   NeuralNetworkGPU,
