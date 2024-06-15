@@ -22,9 +22,10 @@ type LossFunction = (
 
 function randomDeltas(
   this: IKernelFunctionThis,
+  errors: number[],
   learningRate: number
 ) {
-  return Math.random() * learningRate;
+  return errors[this.thread.x];
 }
 
 function randomErrors(
@@ -70,9 +71,8 @@ export class ELM<InputType extends INeuralNetworkData, OutputType extends INeura
         // @ts-expect-error
         output = this.backwardPropagate[layer](this.outputs[layer], target);
       } else {
-        const layerSize = (this.biases[layer] as number[]).length;
         const errors = this.randomErrors[layer](learningRate);
-        const result = this.randomDeltas[layer](learningRate);
+        const result = errors;
         output = {
           errors,
           result
