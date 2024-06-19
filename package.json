@@ -91,7 +91,7 @@
   ],
   "license": "MIT",
   "main": "dist/index.js",
-  "name": "brain.js",
+  "name": "@sogouda/brain.js",
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/brainjs/brain.js.git"
@@ -110,10 +110,10 @@
     "watch": "run-p watch:**",
     "watch:node": "rollup -c rollup.config.js -w",
     "watch:test": "jest --watch",
-    "clean": "rm ./dist",
+    "clean": "rm -rf ./dist/",
     "prepare": "npm run clean && npm run build"
   },
   "types": "dist/",
   "unpkg": "dist/browser.js",
-  "version": "2.0.0-beta.23"
+  "version": "0.0.0"
 }
