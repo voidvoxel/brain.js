@@ -1002,7 +1002,7 @@ export class NeuralNetwork<
               this._getLossKernelFunctionThis(layer, node),
               output,
               target[node],
-              (input as unknown) as NeuralNetworkIO,
+              input as unknown as NeuralNetworkIO,
               this.ram
             );
           } else error = target[node] - output;
