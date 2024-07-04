@@ -70,13 +70,11 @@ export type RAMFunction = (
  */
 export interface ILossAnalyticsSnapshot {
   mean: number;
-  median: number;
   total: number;
 }
 
 const EMPTY_LOSS_SNAPSHOT: ILossAnalyticsSnapshot = {
   mean: Number.MAX_SAFE_INTEGER,
-  median: Number.MAX_SAFE_INTEGER,
   total: Number.MAX_SAFE_INTEGER,
 };
 
@@ -94,15 +92,13 @@ export interface ILossAnalytics {
   max: ILossAnalyticsSnapshot;
   min: ILossAnalyticsSnapshot;
   previous: ILossAnalyticsSnapshot;
-  projected: ILossAnalyticsSnapshot;
 }
 
 const EMPTY_LOSS: ILossAnalytics = {
   current: createLossAnalyticsSnapshot(),
-  max: createLossAnalyticsSnapshot(),
+  max: { mean: 0, total: 0 },
   min: createLossAnalyticsSnapshot(),
   previous: createLossAnalyticsSnapshot(),
-  projected: createLossAnalyticsSnapshot(),
 };
 
 Object.freeze(EMPTY_LOSS);
@@ -297,6 +293,8 @@ export class NeuralNetwork<
   _ram: NeuralNetworkRAM = [];
   _ramSize = 1;
 
+  _kernelThis: IKernelFunctionThis<{}>;
+
   runInput: (input: Float32Array) => Float32Array = (input: Float32Array) => {
     this.setActivation();
     const output = this.runInput(input);
@@ -347,6 +345,8 @@ export class NeuralNetwork<
     // Initialize the loss function.
     if (options.loss) this._lossFunction = options.loss;
     if (options.updateRAM) this._ramFunction = options.updateRAM;
+    // Initialize _kernelThis.
+    this._kernelThis = this._getLossKernelFunctionThis(0, 0);
   }
 
   /**
@@ -494,8 +494,9 @@ export class NeuralNetwork<
         this._ram = this.ram.map((layerRAM, layer) =>
           layerRAM.map((neuronRAM, neuron) =>
             neuronRAM.map((value, index) => {
+              this._kernelThis = this._getRAMKernelFunctionThis(layer, neuron, index);
               return updateRAM.call(
-                this._getRAMKernelFunctionThis(layer, neuron, index),
+                this._kernelThis,
                 this.ram,
                 (input as unknown) as NeuralNetworkIO,
                 (output as unknown) as NeuralNetworkIO,
@@ -890,6 +891,7 @@ export class NeuralNetwork<
         error: status.error,
       });
     }
+    this._refreshLoss();
     return true;
   }
 
@@ -938,6 +940,8 @@ export class NeuralNetwork<
 
     if (lossFunctionBackup) this.lossFunction = lossFunctionBackup;
 
+    this._refreshLoss();
+
     return status;
   }
 
@@ -960,6 +964,7 @@ export class NeuralNetwork<
           }
         );
         thawedTrain.tick();
+        this._refreshLoss();
       } catch (trainError) {
         reject(trainError);
       }
@@ -985,6 +990,8 @@ export class NeuralNetwork<
   }
 
   _calculateDeltasSigmoid(target: Float32Array, input: Float32Array): void {
+    let lossCount = 0;
+    let totalLoss = 0.0;
     for (let layer = this.outputLayer; layer >= 0; layer--) {
       const activeSize = this.sizes[layer];
       const activeOutput = this.outputs[layer];
@@ -998,13 +1005,16 @@ export class NeuralNetwork<
         let error = 0;
         if (layer === this.outputLayer) {
           if (typeof this._lossFunction === 'function') {
+            this._kernelThis = this._getLossKernelFunctionThis(layer, node);
             error = this._lossFunction.call(
-              this._getLossKernelFunctionThis(layer, node),
+              this._kernelThis,
               output,
               target[node],
               input as unknown as NeuralNetworkIO,
               this.ram
             );
+            lossCount++;
+            totalLoss += Math.abs(error);
           } else error = target[node] - output;
         } else {
           const deltas = this.deltas[layer + 1];
@@ -1016,9 +1026,18 @@ export class NeuralNetwork<
         activeDeltas[node] = error * output * (1 - output);
       }
     }
+    if (lossCount) {
+      const meanLoss = totalLoss / lossCount;
+      this.loss.previous = this.loss.current;
+      this.loss.current = { mean: meanLoss, total: totalLoss };
+      if (this.loss.current.total < this.loss.min.total) this.loss.min = this.loss.current;
+      if (this.loss.current.total > this.loss.max.total) this.loss.max = this.loss.current;
+    }
   }
 
   _calculateDeltasRelu(target: Float32Array, input: Float32Array): void {
+    let lossCount = 0;
+    let totalLoss = 0.0;
     for (let layer = this.outputLayer; layer >= 0; layer--) {
       const currentSize = this.sizes[layer];
       const currentOutputs = this.outputs[layer];
@@ -1033,13 +1052,16 @@ export class NeuralNetwork<
         let error = 0;
         if (layer === this.outputLayer) {
           if (typeof this._lossFunction === 'function') {
+            this._kernelThis = this._getLossKernelFunctionThis(layer, node);
             error = this._lossFunction.call(
-              this._getLossKernelFunctionThis(layer, node),
+              this._kernelThis,
               output,
               target[node],
               (input as unknown) as NeuralNetworkIO,
               this.ram
             );
+            lossCount++;
+            totalLoss += Math.abs(error);
           } else error = target[node] - output;
         } else {
           for (let k = 0; k < nextDeltas.length; k++) {
@@ -1050,9 +1072,18 @@ export class NeuralNetwork<
         currentDeltas[node] = output > 0 ? error : 0;
       }
     }
+    if (lossCount) {
+      const meanLoss = totalLoss / lossCount;
+      this.loss.previous = this.loss.current;
+      this.loss.current = { mean: meanLoss, total: totalLoss };
+      if (this.loss.current.total < this.loss.min.total) this.loss.min = this.loss.current;
+      if (this.loss.current.total > this.loss.max.total) this.loss.max = this.loss.current;
+    }
   }
 
   _calculateDeltasLeakyRelu(target: Float32Array, input: Float32Array): void {
+    let lossCount = 0;
+    let totalLoss = 0.0;
     const alpha = this.trainOpts.leakyReluAlpha;
     for (let layer = this.outputLayer; layer >= 0; layer--) {
       const currentSize = this.sizes[layer];
@@ -1068,13 +1099,16 @@ export class NeuralNetwork<
         let error = 0;
         if (layer === this.outputLayer) {
           if (typeof this._lossFunction === 'function') {
+            this._kernelThis = this._getLossKernelFunctionThis(layer, node);
             error = this._lossFunction.call(
-              this._getLossKernelFunctionThis(layer, node),
+              this._kernelThis,
               output,
               target[node],
               (input as unknown) as NeuralNetworkIO,
               this.ram
             );
+            lossCount++;
+            totalLoss += Math.abs(error);
           } else error = target[node] - output;
         } else {
           for (let k = 0; k < nextDeltas.length; k++) {
@@ -1085,9 +1119,18 @@ export class NeuralNetwork<
         currentDeltas[node] = output > 0 ? error : alpha * error;
       }
     }
+    if (lossCount) {
+      const meanLoss = totalLoss / lossCount;
+      this.loss.previous = this.loss.current;
+      this.loss.current = { mean: meanLoss, total: totalLoss };
+      if (this.loss.current.total < this.loss.min.total) this.loss.min = this.loss.current;
+      if (this.loss.current.total > this.loss.max.total) this.loss.max = this.loss.current;
+    }
   }
 
   _calculateDeltasTanh(target: Float32Array, input: Float32Array): void {
+    let lossCount = 0;
+    let totalLoss = 0.0;
     for (let layer = this.outputLayer; layer >= 0; layer--) {
       const currentSize = this.sizes[layer];
       const currentOutputs = this.outputs[layer];
@@ -1102,13 +1145,16 @@ export class NeuralNetwork<
         let error = 0;
         if (layer === this.outputLayer) {
           if (typeof this._lossFunction === 'function') {
+            this._kernelThis = this._getLossKernelFunctionThis(layer, node);
             error = this._lossFunction.call(
-              this._getLossKernelFunctionThis(layer, node),
+              this._kernelThis,
               output,
               target[node],
               (input as unknown) as NeuralNetworkIO,
               this.ram
             );
+            lossCount++;
+            totalLoss += Math.abs(error);
           } else error = target[node] - output;
         } else {
           for (let k = 0; k < nextDeltas.length; k++) {
@@ -1119,6 +1165,32 @@ export class NeuralNetwork<
         currentDeltas[node] = (1 - output * output) * error;
       }
     }
+    if (lossCount) {
+      const meanLoss = totalLoss / lossCount;
+      this.loss.previous = this.loss.current;
+      this.loss.current = { mean: meanLoss, total: totalLoss };
+      if (this.loss.current.total < this.loss.min.total) this.loss.min = this.loss.current;
+      if (this.loss.current.total > this.loss.max.total) this.loss.max = this.loss.current;
+    }
+  }
+
+  _refreshLoss(): boolean {
+    let lossCount = 0;
+    let totalLoss = 0.0;
+    for (let layer = 0; layer <= this.outputLayer; layer++) {
+      const layerLossCount = (this.errors[layer] as Float32Array).length;
+      lossCount += layerLossCount;
+      for (let i = 0; i < layerLossCount; i++) totalLoss += (this.errors[layer] as Float32Array)[i];
+    }
+    if (lossCount) {
+      const meanLoss = totalLoss / lossCount;
+      this.loss.previous = this.loss.current;
+      this.loss.current = { mean: meanLoss, total: totalLoss };
+      if (this.loss.current.total < this.loss.min.total) this.loss.min = this.loss.current;
+      if (this.loss.current.total > this.loss.max.total) this.loss.max = this.loss.current;
+    }
+
+    return false;
   }
 
   /**
