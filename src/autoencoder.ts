@@ -33,8 +33,8 @@ function loss(
   // Otherwise, return 3200% of the full loss value.
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-expect-error
-  if (Math.round(actual) !== Math.round(inputs[this.thread.x])) error *= 32;
-  else error *= 0.03125;
+  if (Math.round(actual) !== Math.round(inputs[this.thread.x])) error *= 2;
+  else error *= 0.5;
 
   return error;
 }
@@ -68,15 +68,22 @@ export class Autoencoder<
   /**
    * Get the layer containing the encoded representation.
    */
-  private get encodedLayer(): KernelOutput {
-    return this.outputs[this.encodedLayerIndex];
+  private get encoded(): KernelOutput {
+    return this.outputs[this.encodedLayer];
   }
 
   /**
    * Get the offset of the encoded layer.
    */
-  private get encodedLayerIndex(): number {
+  public get encodedLayer(): number {
     return Math.round(this.outputs.length * 0.5) - 1;
+  }
+
+  /**
+   * Get the encoding size of the autoencoder.
+   */
+  public get encodingSize(): number {
+    return this.sizes[this.encodedLayer];
   }
 
   /**
@@ -124,7 +131,7 @@ export class Autoencoder<
 
     // Get the auto-encoded input.
     let encodedInput: TextureArrayOutput = this
-      .encodedLayer as TextureArrayOutput;
+      .encoded as TextureArrayOutput;
 
     // If the encoded input is a `Texture`, convert it into an `Array`.
     if (encodedInput instanceof Texture) encodedInput = encodedInput.toArray();
@@ -217,7 +224,7 @@ export class Autoencoder<
     const layers: IJSONLayer[] = [];
     const sizes: number[] = [];
 
-    for (let i = this.encodedLayerIndex; i < this.sizes.length; i++) {
+    for (let i = this.encodedLayer; i < this.sizes.length; i++) {
       layers.push(json.layers[i]);
       sizes.push(json.sizes[i]);
     }
