@@ -125,8 +125,6 @@ export class Autoencoder<
     // Get the auto-encoded input.
     let encodedInput: TextureArrayOutput = this
       .encodedLayer as TextureArrayOutput;
-    let encodedInput: TextureArrayOutput = this
-      .encodedLayer as TextureArrayOutput;
 
     // If the encoded input is a `Texture`, convert it into an `Array`.
     if (encodedInput instanceof Texture) encodedInput = encodedInput.toArray();
